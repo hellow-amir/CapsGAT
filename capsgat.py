@@ -3,14 +3,19 @@ import re
 import json
 import csv
 import os
+import webbrowser
 from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QTextEdit, QListWidget, QPushButton, QWidget, QLabel, 
                              QFileDialog, QMessageBox, QSpinBox, QShortcut, QFrame,
                              QInputDialog, QLineEdit, QDialog, QDialogButtonBox, 
-                             QGridLayout, QPlainTextEdit, QCheckBox, QTabWidget, QRadioButton)
-from PyQt5.QtCore import Qt, QTimer
+                             QGridLayout, QPlainTextEdit, QCheckBox, QTabWidget, QRadioButton,
+                             QSlider, QProgressBar, QMenuBar, QMenu, QAction, QFontDialog,
+                             QGroupBox, QScrollArea, QSizePolicy, QComboBox)
+from PyQt5.QtCore import Qt, QTimer, QUrl
 from PyQt5.QtGui import QFont, QKeySequence, QColor, QTextCharFormat, QSyntaxHighlighter, QIcon
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+from PyQt5.QtMultimediaWidgets import QVideoWidget
 
 def resource_path(relative_path):
     try:
@@ -30,7 +35,7 @@ class TextSelectionDialog(QDialog):
     def init_ui(self):
         self.setWindowTitle("Select Text")
         self.setGeometry(300, 300, 700, 300)
-        
+        	        
         layout = QVBoxLayout(self)
         
         instructions = QLabel("Use ← → arrows to adjust selection, Shift+arrows to extend, then press Enter:")
@@ -121,7 +126,7 @@ class BlockSplitDialog(QDialog):
     def init_ui(self):
         self.setWindowTitle("Split Block")
         self.setGeometry(300, 300, 700, 250)
-        
+                
         layout = QVBoxLayout(self)
         
         instructions = QLabel("Use ← → arrows to position split, then press Enter to confirm:")
@@ -193,6 +198,7 @@ class EnhancedPauseDialog(QDialog):
             "short inhale", "medium inhale", "long inhale", 
             "short exhale", "medium exhale", "long exhale"
         ]
+        
         self.init_ui()
         
     def init_ui(self):
@@ -444,6 +450,97 @@ class EditDialog(QDialog):
     def get_text(self):
         return self.text_edit.toPlainText()
 
+class SettingsDialog(QDialog):
+    def __init__(self, current_font, current_theme, parent=None):  # Add current_theme parameter
+        super().__init__(parent)
+        self.selected_font = current_font
+        self.current_theme = current_theme  # Store it
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("Settings")
+        self.setGeometry(100, 100, 120, 120)
+        
+        layout = QVBoxLayout(self)
+        
+        # Font selection
+        font_layout = QHBoxLayout()
+        font_layout.addWidget(QLabel("Text Display Font:"))
+        
+        self.font_button = QPushButton(f"{self.selected_font.family()} {self.selected_font.pointSize()}pt")
+        self.font_button.clicked.connect(self.select_font)
+        font_layout.addWidget(self.font_button)
+        font_layout.addStretch()
+        
+        layout.addLayout(font_layout)
+        
+        theme_layout = QHBoxLayout()
+        
+        theme_layout.addWidget(QLabel("Viewer Theme:"))
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Light", "Dark"])
+        self.theme_combo.setCurrentText("Light")  # Default
+        self.theme_combo.setCurrentText(self.current_theme.capitalize())
+        theme_layout.addWidget(self.theme_combo)
+        theme_layout.addStretch()
+
+        layout.addLayout(theme_layout)
+                
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+    def select_font(self):
+        font, ok = QFontDialog.getFont(self.selected_font, self)
+        if ok:
+            self.selected_font = font
+            self.font_button.setText(f"{font.family()} {font.pointSize()}pt")
+    
+    def get_font(self):
+        return self.selected_font
+    
+    def get_theme(self):
+        return self.theme_combo.currentText().lower()
+
+class ProjectMemoDialog(QDialog):
+    def __init__(self, project_name="", project_memo="", parent=None):
+        super().__init__(parent)
+        self.project_name = project_name
+        self.project_memo = project_memo
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("Project Memo")
+        self.setGeometry(300, 300, 500, 400)
+        
+        layout = QVBoxLayout(self)
+        
+        # Project name
+        layout.addWidget(QLabel("Project Name:"))
+        self.name_edit = QLineEdit(self.project_name)
+        self.name_edit.setPlaceholderText("Enter project name")
+        layout.addWidget(self.name_edit)
+        
+        # Project memo
+        layout.addWidget(QLabel("Project Memo:"))
+        self.memo_edit = QPlainTextEdit()
+        self.memo_edit.setPlainText(self.project_memo)
+        self.memo_edit.setPlaceholderText("Enter project notes or description")
+        layout.addWidget(self.memo_edit)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+    def get_project_info(self):
+        return {
+            'name': self.name_edit.text(),
+            'memo': self.memo_edit.toPlainText()
+        }
+
 class JsonImportDialog(QDialog):
     def __init__(self, has_tokens=False, parent=None):
         super().__init__(parent)
@@ -489,16 +586,18 @@ class JsonImportDialog(QDialog):
             return "one_block"
 
 class ExportPreviewDialog(QDialog):
-    def __init__(self, parent=None, has_timestamps=True):
+    def __init__(self, parent=None, has_timestamps=True, project_info=None, audio_path=None):
         super().__init__(parent)
         self.include_timestamps = has_timestamps
         self.current_include_timestamps = has_timestamps
         self.export_format = "html"  # Default to HTML
+        self.project_info = project_info or {}
+        self.audio_path = audio_path
         self.init_ui()
         
     def init_ui(self):
         self.setWindowTitle("Export Preview")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 800, 700)
         
         layout = QVBoxLayout(self)
         
@@ -517,8 +616,11 @@ class ExportPreviewDialog(QDialog):
         format_layout.addWidget(self.txt_radio)
         format_layout.addStretch()
         
+        # Options group
+        options_group = QGroupBox("Export Options")
+        options_layout = QVBoxLayout()
+        
         # Timestamp option
-        timestamp_layout = QHBoxLayout()
         self.timestamp_check = QCheckBox("Include timestamps")
         self.timestamp_check.setChecked(self.include_timestamps)
         self.timestamp_check.setEnabled(self.include_timestamps)
@@ -527,8 +629,24 @@ class ExportPreviewDialog(QDialog):
         if not self.include_timestamps:
             self.timestamp_check.setToolTip("Timestamps not available for text file imports")
         
-        timestamp_layout.addWidget(self.timestamp_check)
-        timestamp_layout.addStretch()
+        # Project info options
+        self.title_check = QCheckBox("Include project title")
+        self.title_check.setChecked(True)
+        self.title_check.toggled.connect(self.update_preview)
+        
+        self.memo_check = QCheckBox("Include project memo") 
+        self.memo_check.setChecked(True)
+        self.memo_check.toggled.connect(self.update_preview)
+        
+        self.audio_check = QCheckBox("Include audio file path")
+        self.audio_check.setChecked(True)
+        self.audio_check.toggled.connect(self.update_preview)
+        
+        options_layout.addWidget(self.timestamp_check)
+        options_layout.addWidget(self.title_check)
+        options_layout.addWidget(self.memo_check)
+        options_layout.addWidget(self.audio_check)
+        options_group.setLayout(options_layout)
         
         # Preview area
         preview_label = QLabel("Preview:")
@@ -544,7 +662,7 @@ class ExportPreviewDialog(QDialog):
         button_box.rejected.connect(self.reject)
         
         layout.addLayout(format_layout)
-        layout.addLayout(timestamp_layout)
+        layout.addWidget(options_group)
         layout.addWidget(preview_label)
         layout.addWidget(self.preview_text)
         layout.addWidget(button_box)
@@ -565,9 +683,46 @@ class ExportPreviewDialog(QDialog):
         # Get the parent to regenerate transcript text with current timestamp setting
         parent = self.parent()
         if hasattr(parent, 'generate_transcript_text'):
-            preview_text = parent.generate_transcript_text(include_timestamps=self.current_include_timestamps)
+            transcript_text = parent.generate_transcript_text(include_timestamps=self.current_include_timestamps)
+            
+            # Add project info if requested
+            header_lines = []
+            
+            if self.title_check.isChecked() and self.project_info.get('name'):
+                if self.export_format == "html":
+                    header_lines.append(f"<h1>{self.project_info['name']}</h1>")
+                else:
+                    header_lines.append(self.project_info['name'])
+                    header_lines.append("=" * len(self.project_info['name']))
+                    header_lines.append("")
+            
+            if self.memo_check.isChecked() and self.project_info.get('memo'):
+                if self.export_format == "html":
+                    header_lines.append(f"<p><strong>Project Memo:</strong> {self.project_info['memo']}</p>")
+                else:
+                    header_lines.append(f"Project Memo: {self.project_info['memo']}")
+                    header_lines.append("")
+            
+            if self.audio_check.isChecked() and self.audio_path:
+                audio_name = Path(self.audio_path).name
+                if self.export_format == "html":
+                    header_lines.append(f"<p><strong>Audio File:</strong> {audio_name}</p>")
+                else:
+                    header_lines.append(f"Audio File: {audio_name}")
+                    header_lines.append("")
+            
+            if header_lines:
+                if self.export_format == "html":
+                    header_text = "\n".join(header_lines)
+                    full_text = f"{header_text}\n{transcript_text}"
+                else:
+                    header_text = "\n".join(header_lines)
+                    full_text = f"{header_text}\n{transcript_text}"
+            else:
+                full_text = transcript_text
+                
         else:
-            preview_text = "Preview not available"
+            full_text = "Preview not available"
             
         if self.export_format == "html":
             html_content = f"""
@@ -581,22 +736,118 @@ class ExportPreviewDialog(QDialog):
                 margin: 20px;
                 white-space: pre;
             }}
+            h1 {{
+                font-family: Arial, sans-serif;
+                color: #333;
+                border-bottom: 2px solid #333;
+                padding-bottom: 10px;
+            }}
             </style>
             </head>
             <body>
-            {preview_text}
+            {full_text}
             </body>
             </html>
             """
             self.preview_text.setHtml(html_content)
         else:
-            self.preview_text.setPlainText(preview_text)
+            self.preview_text.setPlainText(full_text)
     
     def get_export_settings(self):
         return {
             'format': self.export_format,
-            'include_timestamps': self.current_include_timestamps
+            'include_timestamps': self.current_include_timestamps,
+            'include_title': self.title_check.isChecked(),
+            'include_memo': self.memo_check.isChecked(),
+            'include_audio': self.audio_check.isChecked()
         }
+
+class JumpToTimeDialog(QDialog):
+    def __init__(self, max_duration_ms, parent=None):
+        super().__init__(parent)
+        self.max_duration_ms = max_duration_ms
+        self.target_time_ms = 0
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("Jump to Time")
+        self.setGeometry(300, 300, 400, 200)
+        
+        layout = QVBoxLayout(self)
+        
+        instructions = QLabel("Enter time to jump to (format: MM:SS or HH:MM:SS):")
+        instructions.setStyleSheet("font-weight: bold;")
+        layout.addWidget(instructions)
+        
+        self.time_edit = QLineEdit()
+        self.time_edit.setPlaceholderText("e.g., 1:30 or 0:01:30")
+        layout.addWidget(self.time_edit)
+        
+        # Current max time display
+        max_minutes = self.max_duration_ms // 60000
+        max_seconds = (self.max_duration_ms % 60000) // 1000
+        max_hours = max_minutes // 60
+        max_minutes = max_minutes % 60
+        
+        max_time_label = QLabel(f"Maximum time: {max_hours:02d}:{max_minutes:02d}:{max_seconds:02d}")
+        layout.addWidget(max_time_label)
+        
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("color: red;")
+        layout.addWidget(self.error_label)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.validate_and_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.time_edit.setFocus()
+        
+    def validate_and_accept(self):
+        time_str = self.time_edit.text().strip()
+        if not time_str:
+            self.error_label.setText("Please enter a time")
+            return
+            
+        # Parse time format (MM:SS or HH:MM:SS)
+        parts = time_str.split(':')
+        if len(parts) == 2:
+            # MM:SS format
+            try:
+                minutes = int(parts[0])
+                seconds = int(parts[1])
+                hours = 0
+            except ValueError:
+                self.error_label.setText("Invalid time format")
+                return
+        elif len(parts) == 3:
+            # HH:MM:SS format
+            try:
+                hours = int(parts[0])
+                minutes = int(parts[1])
+                seconds = int(parts[2])
+            except ValueError:
+                self.error_label.setText("Invalid time format")
+                return
+        else:
+            self.error_label.setText("Use MM:SS or HH:MM:SS format")
+            return
+            
+        # Validate time values
+        if minutes >= 60 or seconds >= 60:
+            self.error_label.setText("Minutes and seconds must be less than 60")
+            return
+            
+        self.target_time_ms = (hours * 3600 + minutes * 60 + seconds) * 1000
+        
+        if self.target_time_ms > self.max_duration_ms:
+            self.error_label.setText("Time exceeds audio duration")
+            return
+            
+        self.accept()
+        
+    def get_target_time(self):
+        return self.target_time_ms
 
 class SRTEditor(QMainWindow):
     def __init__(self):
@@ -613,12 +864,25 @@ class SRTEditor(QMainWindow):
         self.context_blocks = 5
         self.current_file_path = None
         self.file_has_timestamps = True
+        self.audio_file_path = None
+        self.media_player = None
+        self.is_playing = False
+        self.auto_sync_enabled = True
+        self.auto_pause_enabled = True  # NEW: Autopause feature
+        self.sync_timer = QTimer()
+        self.project_name = ""
+        self.project_memo = ""
+        self.text_display_font = QFont("Arial", 12)
+        self.has_unsaved_changes = False  # NEW: Track unsaved changes
         self.init_ui()
         
     def init_ui(self):
-        self.setWindowTitle("CapsGAT")
+        self.setWindowTitle("CapsGAT 1.1 - Subtitle to GAT2-style Transcript Workstation")
         self.setGeometry(100, 100, 1400, 900)
         self.setWindowIcon(QIcon(resource_path('images/logo.ico')))
+        
+        # Create menu bar
+        self.create_menu_bar()
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -626,31 +890,6 @@ class SRTEditor(QMainWindow):
         
         # Left panel - Context display
         left_panel = QVBoxLayout()
-        
-        # File controls
-        file_layout = QHBoxLayout()
-        
-        self.btn_load = QPushButton("Import File")
-        self.btn_load.clicked.connect(self.load_file)
-        
-        self.btn_load_project = QPushButton("Load Project")
-        self.btn_load_project.clicked.connect(self.load_project)
-        
-        self.btn_save = QPushButton("Save Project")
-        self.btn_save.clicked.connect(self.save_project)
-        self.btn_save.setEnabled(False)
-        
-        self.btn_export = QPushButton("Export")
-        self.btn_export.clicked.connect(self.export_transcript)
-        self.btn_export.setEnabled(False)
-        
-        file_layout.addWidget(self.btn_load)
-        file_layout.addWidget(self.btn_load_project)
-        file_layout.addWidget(self.btn_save)
-        file_layout.addWidget(self.btn_export)
-        file_layout.addStretch()
-        
-        left_panel.addLayout(file_layout)
         
         # Current block info display
         self.current_info_label = QLabel("No block selected")
@@ -673,7 +912,7 @@ class SRTEditor(QMainWindow):
         # Main text display
         self.text_display = QTextEdit()
         self.text_display.setReadOnly(True)
-        self.text_display.setFont(QFont("Arial", 12))
+        self.text_display.setFont(self.text_display_font)
         self.text_display.setStyleSheet("""
             QTextEdit {
                 background-color: #fafafa;
@@ -724,24 +963,33 @@ class SRTEditor(QMainWindow):
         # Right panel - Controls
         right_panel = QVBoxLayout()
         
-        speaker_label = QLabel("Assign Speaker (Keyboard Shortcuts):")
-                      
+        # Audio controls - now in a grouped layout
+        #audio_group = QGroupBox()
+        #audio_layout = QVBoxLayout()
+
+             
+        # Speaker assignment
+        speaker_label = QLabel("Assign Speaker:")
         speaker_label.setFont(QFont("Arial", 12, QFont.Bold))
         right_panel.addWidget(speaker_label)
-     
+        
+        
         self.speaker_container = QWidget()
         self.speaker_layout = QVBoxLayout(self.speaker_container)
         self.create_speaker_widgets()
         right_panel.addWidget(self.speaker_container)
         
+           
+         # Manage speakers
+        #right_panel.addWidget(QLabel("Manage Speakers:"))
+         
         manage_layout = QHBoxLayout()
         self.speaker_edit = QSpinBox()
         self.speaker_edit.setMinimum(2)
         self.speaker_edit.setMaximum(8)
         self.speaker_edit.setValue(4)
         self.speaker_edit.valueChanged.connect(self.update_speaker_count)
-
-        # Add stretch on left, then content, then stretch on right for centering
+        
         manage_layout.addStretch()
         manage_layout.addWidget(QLabel("Number of speakers:"))
         manage_layout.addWidget(self.speaker_edit)
@@ -749,7 +997,102 @@ class SRTEditor(QMainWindow):
 
         right_panel.addLayout(manage_layout)
         
-        symbols_label = QLabel("\nGAT2 Symbols:")
+         
+         # Audio Controls Label (outside the box)
+        audio_label = QLabel("Audio Controls:")
+        audio_label.setFont(QFont("Arial", 12, QFont.Bold))
+        right_panel.addWidget(audio_label)
+
+        # Audio controls group (without title)
+        audio_group = QGroupBox()  # Remove the title from constructor
+        audio_layout = QVBoxLayout()
+
+        # Audio file info
+        self.audio_info_label = QLabel("No audio loaded")
+        self.audio_info_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
+        audio_layout.addWidget(self.audio_info_label)
+
+        # Audio controls - layout with rewind/forward
+        audio_controls_layout = QHBoxLayout()
+
+        self.btn_load_audio = QPushButton("...")
+        self.btn_load_audio.clicked.connect(self.load_audio_file)
+
+        # Rewind, Play/Pause, Fast Forward buttons
+        self.btn_rewind = QPushButton("⏪ (PgUp)")
+        self.btn_rewind.clicked.connect(self.rewind_audio)
+        self.btn_rewind.setEnabled(False)
+
+        self.btn_play = QPushButton("⏯ (End)")
+        self.btn_play.clicked.connect(self.toggle_playback)
+        self.btn_play.setEnabled(False)
+
+        self.btn_forward = QPushButton("⏩ (PgDn)")
+        self.btn_forward.clicked.connect(self.forward_audio)
+        self.btn_forward.setEnabled(False)
+
+        #self.btn_stop = QPushButton("Stop")
+        #self.btn_stop.clicked.connect(self.stop_audio)
+        #self.btn_stop.setEnabled(False)
+
+        audio_controls_layout.addWidget(self.btn_load_audio)
+        audio_controls_layout.addWidget(self.btn_rewind)
+        audio_controls_layout.addWidget(self.btn_play)
+        audio_controls_layout.addWidget(self.btn_forward)
+        #audio_controls_layout.addWidget(self.btn_stop)
+        audio_controls_layout.addStretch()
+
+        audio_layout.addLayout(audio_controls_layout)
+
+        # Progress bar
+        self.audio_progress = QSlider(Qt.Horizontal)
+        self.audio_progress.setEnabled(False)
+        self.audio_progress.sliderMoved.connect(self.seek_audio)
+        audio_layout.addWidget(self.audio_progress)
+
+        # Time display with jump button
+        time_jump_layout = QHBoxLayout()
+        self.time_label = QLabel("00:00 / 00:00")
+        self.time_label.setAlignment(Qt.AlignCenter)
+
+        # Jump to time button
+        self.btn_jump_to = QPushButton("Jump")
+        self.btn_jump_to.clicked.connect(self.jump_to_time)
+        self.btn_jump_to.setEnabled(False)
+
+        time_jump_layout.addWidget(self.time_label)
+        time_jump_layout.addWidget(self.btn_jump_to)
+        audio_layout.addLayout(time_jump_layout)
+
+        # Auto-sync and Autopause checkboxes
+        sync_layout = QHBoxLayout()
+        self.auto_sync_check = QCheckBox("Auto-sync to audio")
+        self.auto_sync_check.setEnabled(False)
+        self.auto_sync_check.toggled.connect(self.toggle_auto_sync)
+
+        self.auto_pause_check = QCheckBox("Autopause during editing")
+        self.auto_pause_check.setEnabled(False)
+        self.auto_pause_check.toggled.connect(self.toggle_auto_pause)
+
+        sync_layout.addWidget(self.auto_sync_check)
+        sync_layout.addWidget(self.auto_pause_check)
+        sync_layout.addStretch()
+
+        audio_layout.addLayout(sync_layout)
+
+        audio_group.setLayout(audio_layout)
+        right_panel.addWidget(audio_group)
+        
+        # Unassigned blocks
+        unassigned_blocks_label = QLabel("Unassigned Blocks:")
+        unassigned_blocks_label.setFont(QFont("Arial", 12, QFont.Bold))
+        right_panel.addWidget(unassigned_blocks_label)
+        self.unassigned_list = QListWidget()
+        self.unassigned_list.itemDoubleClicked.connect(self.jump_to_block)
+        right_panel.addWidget(self.unassigned_list)
+        
+        # Symbols section
+        symbols_label = QLabel("GAT2 Symbols:")
         symbols_label.setFont(QFont("Arial", 12, QFont.Bold))
         right_panel.addWidget(symbols_label)
         
@@ -765,72 +1108,519 @@ class SRTEditor(QMainWindow):
             }
         """)
         right_panel.addWidget(self.btn_open_symbols)
-        
-        right_panel.addWidget(QLabel("Unassigned Blocks:"))
-        self.unassigned_list = QListWidget()
-        self.unassigned_list.itemDoubleClicked.connect(self.jump_to_block)
-        right_panel.addWidget(self.unassigned_list)
                 
-        instructions = QLabel(
-            "Keyboard Shortcuts:\n\n"
-            "• 1-4: Assign speakers A-D\n"
-            "• N/P or ← →: Navigate blocks\n"
-            "• Space: Split block\n"
-            "• Del: Merge with next\n"
-            "• E: Edit content\n"
-            "• U: Unassign speaker\n"
-            "• *: GAT2 symbols\n"
-            "• .: Insert micropause\n"
-            "• Enter: Insert empty line"
-        )
-        instructions.setWordWrap(True)
-        instructions.setStyleSheet("background-color: #f0f0f0; padding: 10px; border-radius: 5px;")
-        right_panel.addWidget(instructions)
-        
         right_panel.addStretch()
         
         layout.addLayout(left_panel, 4)
         layout.addLayout(right_panel, 1)
         
         self.setup_shortcuts()
+        self.init_audio_player()
+        
+    def create_menu_bar(self):
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu('File')
+        
+        # NEW: New Project option
+        new_project_action = QAction('New Project', self)
+        new_project_action.setShortcut('Ctrl+N')
+        new_project_action.triggered.connect(self.new_project)
+        file_menu.addAction(new_project_action)
+        
+        open_project_action = QAction('Open Project...', self)
+        open_project_action.setShortcut('Ctrl+O')
+        open_project_action.triggered.connect(self.load_project)
+        file_menu.addAction(open_project_action)
+        
+        save_project_action = QAction('Save Project', self)
+        save_project_action.setShortcut('Ctrl+S')
+        save_project_action.triggered.connect(self.save_project)
+        file_menu.addAction(save_project_action)
+        
+        save_as_action = QAction('Save Project As...', self)
+        save_as_action.triggered.connect(self.save_project_as)
+        file_menu.addAction(save_as_action)
+        
+        file_menu.addSeparator()
+        
+        # Import submenu
+        import_menu = file_menu.addMenu('Import')
+        
+        import_subtitles_action = QAction('Subtitles...', self)
+        import_subtitles_action.triggered.connect(self.import_subtitles)
+        import_menu.addAction(import_subtitles_action)
+        
+        import_audio_action = QAction('Audio File...', self)
+        import_audio_action.triggered.connect(self.load_audio_file)
+        import_menu.addAction(import_audio_action)
+        
+        # Export
+        export_action = QAction('Export...', self)
+        export_action.triggered.connect(self.export_transcript)
+        file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction('Exit', self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Edit menu
+        edit_menu = menubar.addMenu('Edit')
+        
+        settings_action = QAction('Settings...', self)
+        settings_action.triggered.connect(self.open_settings)
+        edit_menu.addAction(settings_action)
+        
+        project_memo_action = QAction('Project Memo...', self)
+        project_memo_action.triggered.connect(self.open_project_memo)
+        edit_menu.addAction(project_memo_action)
+        
+        # NEW: Help menu
+        help_menu = menubar.addMenu('Help')
+        
+        shortcuts_action = QAction('Shortcuts', self)
+        shortcuts_action.triggered.connect(self.show_shortcuts)
+        help_menu.addAction(shortcuts_action)
+        
+        manual_action = QAction('Online Manual', self)
+        manual_action.triggered.connect(self.open_manual)
+        help_menu.addAction(manual_action)
+        
+        about_action = QAction('About CapsGAT', self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+        
+    def new_project(self):
+        """Create a new empty project"""
+        if self.check_unsaved_changes():
+            self.srt_blocks = []
+            self.current_block_index = 0
+            self.current_file_path = None
+            self.project_name = ""
+            self.project_memo = ""
+            self.has_unsaved_changes = False
+            self.update_display()
+            
+    def check_unsaved_changes(self):
+        """Check if there are unsaved changes and prompt to save"""
+        if self.has_unsaved_changes:
+            reply = QMessageBox.question(
+                self, 
+                "Unsaved Changes", 
+                "You have unsaved changes. Would you like to save them?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel
+            )
+            
+            if reply == QMessageBox.Save:
+                # Use Save As to ensure we're saving as a project file, not overwriting the original transcript
+                return self.save_project(force_save_as=True)
+            elif reply == QMessageBox.Discard:
+                return True
+            else:  # Cancel
+                return False
+        return True
+        
+    def show_shortcuts(self):
+        """Show keyboard shortcuts dialog"""
+        shortcuts_text = """
+Keyboard Shortcuts:
+
+Navigation:
+• P / Left Arrow: Previous block
+• N / Right Arrow: Next block
+• 1-4: Assign speakers A-D
+• U: Unassign current block
+
+Editing:
+• Space: Split current block
+• Delete: Merge with next block
+• E: Edit block content
+• Enter: Insert empty line
+
+GAT2 Symbols:
+• *: Open symbols dialog
+• .: Insert micropause (with placement)
+• h: Insert short inhale (with placement)
+• H: Insert short exhale (with placement)
+
+Audio Controls:
+• End: Play/Pause audio
+• PgUp: Rewind 5 seconds
+• PgDn: Fast forward 5 seconds
+
+File Operations:
+• Ctrl+N: New Project
+• Ctrl+O: Open Project
+• Ctrl+S: Save Project
+"""
+        QMessageBox.information(self, "Keyboard Shortcuts", shortcuts_text)
+        
+    def open_manual(self):
+        """Open online manual in browser"""
+        webbrowser.open("https://github.com/anouarg88/CapsGAT/blob/main/manual.htm")
+        
+    def show_about(self):
+        """Show about dialog"""
+        about_text = """
+CapsGAT 1.1
+
+(c) 2025 Anouâr Gadermann
+Published under GNU Public License 3.0
+
+Engineered with DeepSeek-V3.2
+"""
+        QMessageBox.about(self, "About CapsGAT", about_text)
+        
+    def mark_unsaved_changes(self):
+        """Mark that there are unsaved changes"""
+        self.has_unsaved_changes = True
+        # Update window title to indicate unsaved changes
+        base_title = "CapsGAT 1.1 - GAT2 Transcription Workstation"
+        if self.project_name:
+            self.setWindowTitle(f"{base_title} - {self.project_name} *")
+        else:
+            self.setWindowTitle(f"{base_title} *")
+            
+    def clear_unsaved_changes(self):
+        """Clear unsaved changes marker"""
+        self.has_unsaved_changes = False
+        base_title = "CapsGAT 1.1 - GAT2 Transcription Workstation"
+        if self.project_name:
+            self.setWindowTitle(f"{base_title} - {self.project_name}")
+        else:
+            self.setWindowTitle(base_title)
+        
+    def import_subtitles(self):
+        """Import subtitles via menu - already handles unsaved changes in load_file"""
+        self.load_file()
+        
+    def save_project_as(self):
+        """Save project with new filename"""
+        self.save_project(force_save_as=True)
+        
+    def open_settings(self):
+        # Get current theme, default to 'light' if not set
+        current_theme = getattr(self, 'current_theme', 'light')
+        dialog = SettingsDialog(self.text_display_font, current_theme, self)  # Pass current_theme
+        if dialog.exec_() == QDialog.Accepted:
+            self.text_display_font = dialog.get_font()
+            self.text_display.setFont(self.text_display_font)
+            # Apply theme
+            theme = dialog.get_theme()
+            self.apply_viewer_theme(theme)
+            
+    def open_project_memo(self):
+        """Open project memo dialog"""
+        dialog = ProjectMemoDialog(self.project_name, self.project_memo, self)
+        if dialog.exec_() == QDialog.Accepted:
+            project_info = dialog.get_project_info()
+            self.project_name = project_info['name']
+            self.project_memo = project_info['memo']
+            self.mark_unsaved_changes()
+            self.clear_unsaved_changes()  # Update window title
+        
+    def init_audio_player(self):
+        """Initialize the audio player"""
+        self.media_player = QMediaPlayer()
+        self.media_player.positionChanged.connect(self.update_audio_progress)
+        self.media_player.durationChanged.connect(self.audio_duration_changed)
+        self.media_player.mediaStatusChanged.connect(self.media_status_changed)
+        
+        # Timer for auto-sync during playback
+        self.sync_timer.timeout.connect(self.auto_sync_with_audio)
+        self.sync_timer.start(100)  # Update every 100ms
+        
+    def toggle_auto_sync(self, checked):
+        """Toggle auto-sync on/off"""
+        self.auto_sync_enabled = checked
+        
+    def toggle_auto_pause(self, checked):
+        """Toggle auto-pause on/off"""
+        self.auto_pause_enabled = checked
+        
+    def rewind_audio(self):
+        """Rewind audio by 5 seconds"""
+        if self.media_player:
+            current_pos = self.media_player.position()
+            new_pos = max(0, current_pos - 5000)  # 5 seconds
+            self.media_player.setPosition(new_pos)
+            
+    def forward_audio(self):
+        """Fast forward audio by 5 seconds"""
+        if self.media_player:
+            current_pos = self.media_player.position()
+            duration = self.media_player.duration()
+            new_pos = min(duration, current_pos + 5000)  # 5 seconds
+            self.media_player.setPosition(new_pos)
+            
+    def jump_to_time(self):
+        """Open dialog to jump to specific time"""
+        if self.media_player and self.media_player.duration() > 0:
+            dialog = JumpToTimeDialog(self.media_player.duration(), self)
+            if dialog.exec_() == QDialog.Accepted:
+                target_time = dialog.get_target_time()
+                self.media_player.setPosition(target_time)
+        
+    def load_audio_file(self):
+        """Load an audio file for synchronization"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Load Audio File", "", 
+            "Audio Files (*.mp3 *.wav *.ogg *.m4a *.flac);;All Files (*)"
+        )
+        if file_path:
+            # Check for subtitle files in same directory
+            audio_dir = Path(file_path).parent
+            subtitle_files = list(audio_dir.glob("*.srt")) + list(audio_dir.glob("*.json")) + \
+                           list(audio_dir.glob("*.txt")) + list(audio_dir.glob("*.tsv"))
+            
+            if subtitle_files:
+                reply = QMessageBox.question(
+                    self,
+                    "Subtitle File Found",
+                    f"Found {len(subtitle_files)} subtitle file(s) in the same directory. Would you like to import one?",
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                )
+                
+                if reply == QMessageBox.Yes:
+                    # Let user choose which file to import
+                    file_list = [str(f.name) for f in subtitle_files]
+                    file_name, ok = QInputDialog.getItem(
+                        self, "Select Subtitle File", "Choose a file to import:", file_list, 0, False
+                    )
+                    if ok and file_name:
+                        # ONLY NOW check for unsaved changes before loading subtitle
+                        if self.check_unsaved_changes():
+                            subtitle_path = audio_dir / file_name
+                            self.current_file_path = str(subtitle_path)
+                            self.load_file_from_path(str(subtitle_path))
+                elif reply == QMessageBox.Cancel:
+                    return  # User canceled entirely
+            
+            # Load audio file (no unsaved changes check needed for audio only)
+            self.audio_file_path = file_path
+            self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(file_path)))
+            self.audio_info_label.setText(f"Audio: {Path(file_path).name}")
+            self.btn_play.setEnabled(True)
+            self.btn_rewind.setEnabled(True)
+            self.btn_forward.setEnabled(True)
+            self.btn_jump_to.setEnabled(True)
+            self.auto_sync_check.setEnabled(True)
+            self.auto_pause_check.setEnabled(True)
+            self.audio_progress.setEnabled(True)
+            
+    def load_file_from_path(self, file_path):
+        """Load a subtitle file from given path"""
+        try:
+            file_extension = Path(file_path).suffix.lower()
+            
+            if file_extension == '.srt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.srt_blocks = self.parse_srt(content)
+                self.file_has_timestamps = True
+                
+            elif file_extension == '.txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.srt_blocks = self.parse_text(content)
+                self.file_has_timestamps = False
+                
+            elif file_extension == '.json':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = json.load(f)
+                self.srt_blocks = self.parse_json(content)
+                # Check if any blocks have timestamps
+                self.file_has_timestamps = any(block.get('start_time') for block in self.srt_blocks)
+                
+            elif file_extension == '.tsv':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.srt_blocks = self.parse_tsv(content)
+                self.file_has_timestamps = True
+            
+            self.current_block_index = 0
+            self.current_file_path = file_path
+            
+            # Enable sync checkbox if we have timestamps and audio
+            self.auto_sync_check.setEnabled(self.file_has_timestamps and self.audio_file_path is not None)
+            
+            self.update_display()
+            self.mark_unsaved_changes()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not load file: {str(e)}")
+            
+    def toggle_playback(self):
+        """Toggle play/pause of audio"""
+        if self.media_player.state() == QMediaPlayer.PlayingState:
+            self.media_player.pause()
+            self.btn_play.setText("⏯ End")
+            self.is_playing = False
+        else:
+            # NEW: Check autopause and pause if needed when starting playback with dialog open
+            if self.auto_pause_enabled and self.is_playing:
+                self.media_player.pause()
+            else:
+                self.media_player.play()
+                self.btn_play.setText("⏯ End")
+                self.is_playing = True
+            
+    def stop_audio(self):
+        """Stop audio playback"""
+        self.media_player.stop()
+        self.btn_play.setText("⏯ End")
+        self.is_playing = False
+        self.update_time_display(0, self.media_player.duration())
+        
+    def seek_audio(self, position):
+        """Seek to a specific position in the audio"""
+        self.media_player.setPosition(position)
+        
+    def update_audio_progress(self, position):
+        """Update progress bar and time display"""
+        duration = self.media_player.duration()
+        if duration > 0:
+            self.audio_progress.setRange(0, duration)
+            self.audio_progress.setValue(position)
+            self.update_time_display(position, duration)
+            
+    def update_time_display(self, position, duration):
+        """Update the time display label"""
+        pos_sec = position // 1000
+        dur_sec = duration // 1000
+        self.time_label.setText(f"{pos_sec//60:02d}:{pos_sec%60:02d} / {dur_sec//60:02d}:{dur_sec%60:02d}")
+        
+    def audio_duration_changed(self, duration):
+        """Handle when audio duration is known"""
+        if duration > 0:
+            self.audio_progress.setRange(0, duration)
+            
+    def media_status_changed(self, status):
+        """Handle media status changes"""
+        if status == QMediaPlayer.EndOfMedia:
+            self.btn_play.setText("⏯ End")
+            self.is_playing = False
+            
+    def auto_sync_with_audio(self):
+        """Auto-sync transcript with audio position during playback"""
+        if self.auto_sync_enabled and self.is_playing and self.srt_blocks and self.file_has_timestamps:
+            current_pos = self.media_player.position()
+            
+            # Find the block that corresponds to current audio position
+            for i, block in enumerate(self.srt_blocks):
+                if block.get('start_time'):
+                    # Convert SRT time to milliseconds
+                    time_parts = block['start_time'].split(':')
+                    if len(time_parts) == 3:
+                        hours = int(time_parts[0])
+                        minutes = int(time_parts[1])
+                        seconds_ms = time_parts[2].split(',')
+                        seconds = int(seconds_ms[0])
+                        milliseconds = int(seconds_ms[1]) if len(seconds_ms) > 1 else 0
+                        
+                        block_start_ms = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
+                        
+                        # Check if this block is the current one based on audio position
+                        if i < len(self.srt_blocks) - 1:
+                            next_block = self.srt_blocks[i + 1]
+                            if next_block.get('start_time'):
+                                next_time_parts = next_block['start_time'].split(':')
+                                if len(next_time_parts) == 3:
+                                    next_hours = int(next_time_parts[0])
+                                    next_minutes = int(next_time_parts[1])
+                                    next_seconds_ms = next_time_parts[2].split(',')
+                                    next_seconds = int(next_seconds_ms[0])
+                                    next_milliseconds = int(next_seconds_ms[1]) if len(next_seconds_ms) > 1 else 0
+                                    
+                                    block_end_ms = (next_hours * 3600 + next_minutes * 60 + next_seconds) * 1000 + next_milliseconds
+                                    
+                                    if block_start_ms <= current_pos < block_end_ms and i != self.current_block_index:
+                                        self.current_block_index = i
+                                        self.update_display()
+                                        break
+                        else:
+                            # Last block - just check if we're past its start
+                            if block_start_ms <= current_pos and i != self.current_block_index:
+                                self.current_block_index = i
+                                self.update_display()
+                                break
         
     def create_speaker_widgets(self):
         for i in reversed(range(self.speaker_layout.count())): 
             self.speaker_layout.itemAt(i).widget().setParent(None)
         
+        # Reduce vertical spacing in the main speaker layout
+        self.speaker_layout.setSpacing(5)  # Reduced from default
+        self.speaker_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+        
         self.speaker_widgets = []
         for i, speaker in enumerate(self.speakers):
             speaker_widget = QWidget()
             speaker_layout = QHBoxLayout(speaker_widget)
+            speaker_layout.setSpacing(10)  # Set consistent horizontal spacing
+            speaker_layout.setContentsMargins(5, 2, 5, 2)
             
             color_label = QLabel("■")
             color_label.setStyleSheet(f"color: {self.speaker_colors[i].name()}; font-size: 20px;")
             
             speaker_name_edit = QLineEdit(speaker)
             speaker_name_edit.textChanged.connect(lambda text, idx=i: self.rename_speaker(idx, text))
-            speaker_name_edit.setFixedWidth(100)
+            speaker_name_edit.setFixedWidth(120)  # Slightly narrower
             
             speaker_btn = QPushButton(f"{i+1}. Assign")
             speaker_btn.clicked.connect(lambda checked, idx=i: self.assign_speaker(idx))
-            speaker_btn.setStyleSheet(f"""
-                QPushButton {{ 
-                    background-color: {self.speaker_colors[i].name()}; 
-                    border: 2px solid darkgray;
-                    padding: 5px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {self.speaker_colors[i].lighter(120).name()};
-                }}
-            """)
             
+            # Theme-aware button styling
+            if hasattr(self, 'current_theme') and self.current_theme == "dark":
+                speaker_btn.setStyleSheet(f"""
+                    QPushButton {{ 
+                        background-color: {self.speaker_colors[i].name()}; 
+                        color: white;
+                        border: 2px solid #676767;
+                        padding: 3px 5px;
+                        font-weight: bold;
+                        min-width: 100px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {self.speaker_colors[i].lighter(120).name()};
+                        color: white;
+                    }}
+                """)
+            else:
+                speaker_btn.setStyleSheet(f"""
+                    QPushButton {{ 
+                        background-color: {self.speaker_colors[i].name()}; 
+                        border: 2px solid darkgray;
+                        padding: 3px 5px;
+                        font-weight: bold;
+                        min-width: 100px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {self.speaker_colors[i].lighter(120).name()};
+                    }}
+                """)
+            
+            # Add widgets with strategic stretching
             speaker_layout.addWidget(color_label)
             speaker_layout.addWidget(QLabel("Name:"))
             speaker_layout.addWidget(speaker_name_edit)
+            speaker_layout.addStretch(1)  # This will push the button to the right
             speaker_layout.addWidget(speaker_btn)
-            speaker_layout.addStretch()
             
-            self.speaker_layout.addWidget(speaker_widget)
+            # Center the entire speaker widget in the container
+            centered_widget = QWidget()
+            centered_widget.setMinimumHeight(40)
+            centered_layout = QHBoxLayout(centered_widget)
+            centered_layout.setSpacing(0)
+            centered_layout.setContentsMargins(0, 0, 0, 0)
+            centered_layout.addStretch(1)  # Add stretch before
+            centered_layout.addWidget(speaker_widget)
+            centered_layout.addStretch(1)  # Add stretch after
+            
+            self.speaker_layout.addWidget(centered_widget)
             self.speaker_widgets.append({
                 'name_edit': speaker_name_edit,
                 'button': speaker_btn
@@ -856,10 +1646,17 @@ class SRTEditor(QMainWindow):
         QShortcut(QKeySequence("h"), self).activated.connect(lambda: self.handle_pause("°h"))
         QShortcut(QKeySequence("H"), self).activated.connect(lambda: self.handle_pause("h°"))
         
+        # NEW: Audio control shortcuts
+        QShortcut(QKeySequence("PgUp"), self).activated.connect(self.rewind_audio)
+        QShortcut(QKeySequence("End"), self).activated.connect(self.toggle_playback)
+        QShortcut(QKeySequence("PgDown"), self).activated.connect(self.forward_audio)
+        
+        
     def rename_speaker(self, speaker_idx, new_name):
         if speaker_idx < len(self.speakers):
             self.speakers[speaker_idx] = new_name
             self.update_display()
+            self.mark_unsaved_changes()
         
     def update_speaker_count(self, count):
         while len(self.speakers) > count:
@@ -873,49 +1670,18 @@ class SRTEditor(QMainWindow):
         self.create_speaker_widgets()
         self.setup_shortcuts()
         self.update_display()
+        self.mark_unsaved_changes()
         
     def load_file(self):
+        if not self.check_unsaved_changes():
+            return
+            
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Open File", "", 
             "All Supported Files (*.srt *.txt *.json *.tsv);;SRT Files (*.srt);;Text Files (*.txt);;JSON Files (*.json);;TSV Files (*.tsv)"
         )
         if file_path:
-            try:
-                file_extension = Path(file_path).suffix.lower()
-                
-                if file_extension == '.srt':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    self.srt_blocks = self.parse_srt(content)
-                    self.file_has_timestamps = True
-                    
-                elif file_extension == '.txt':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    self.srt_blocks = self.parse_text(content)
-                    self.file_has_timestamps = False
-                    
-                elif file_extension == '.json':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = json.load(f)
-                    self.srt_blocks = self.parse_json(content)
-                    # Check if any blocks have timestamps
-                    self.file_has_timestamps = any(block.get('start_time') for block in self.srt_blocks)
-                    
-                elif file_extension == '.tsv':
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    self.srt_blocks = self.parse_tsv(content)
-                    self.file_has_timestamps = True
-                
-                self.current_block_index = 0
-                self.current_file_path = file_path
-                self.btn_export.setEnabled(len(self.srt_blocks) > 0)
-                self.btn_save.setEnabled(len(self.srt_blocks) > 0)
-                self.update_display()
-                
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Could not load file: {str(e)}")
+            self.load_file_from_path(file_path)
     
     def parse_srt(self, content):
         blocks = []
@@ -1185,11 +1951,14 @@ class SRTEditor(QMainWindow):
         
         return blocks
     
-    def save_project(self):
+    def save_project(self, force_save_as=False):
         if not self.srt_blocks:
             return
             
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Project", "", "GAT2 Project Files (*.gat2)")
+        file_path = self.current_file_path
+        if force_save_as or not file_path:
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save Project", "", "CapsGAT Project Files (*.capsgat)")
+            
         if file_path:
             try:
                 project_data = {
@@ -1197,18 +1966,31 @@ class SRTEditor(QMainWindow):
                     'current_block_index': self.current_block_index,
                     'speakers': self.speakers,
                     'source_file': self.current_file_path,
-                    'file_has_timestamps': self.file_has_timestamps
+                    'file_has_timestamps': self.file_has_timestamps,
+                    'audio_file_path': self.audio_file_path,
+                    'project_name': self.project_name,
+                    'project_memo': self.project_memo,
+                    'text_display_font': {
+                        'family': self.text_display_font.family(),
+                        'size': self.text_display_font.pointSize(),
+                        'viewer_theme': 'light'  # or get current theme
+                    }
                 }
                 
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(project_data, f, indent=2, ensure_ascii=False)
                     
+                self.current_file_path = file_path
+                self.clear_unsaved_changes()
                 QMessageBox.information(self, "Success", f"Project saved to {file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not save project: {str(e)}")
     
     def load_project(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Load Project", "", "GAT2 Project Files (*.gat2)")
+        if not self.check_unsaved_changes():
+            return
+            
+        file_path, _ = QFileDialog.getOpenFileName(self, "Load Project", "", "CapsGAT Project Files (*.capsgat)")
         if file_path:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -1219,15 +2001,104 @@ class SRTEditor(QMainWindow):
                 self.speakers = project_data['speakers']
                 self.current_file_path = project_data.get('source_file', '')
                 self.file_has_timestamps = project_data.get('file_has_timestamps', True)
+                self.project_name = project_data.get('project_name', '')
+                self.project_memo = project_data.get('project_memo', '')
                 
-                self.btn_export.setEnabled(len(self.srt_blocks) > 0)
-                self.btn_save.setEnabled(len(self.srt_blocks) > 0)
+                # Load font settings
+                font_data = project_data.get('text_display_font')
+                if font_data:
+                    self.text_display_font = QFont(font_data['family'], font_data['size'])
+                    self.text_display.setFont(self.text_display_font)
+                
+                # Load audio file if path exists
+                audio_path = project_data.get('audio_file_path')
+                if audio_path and Path(audio_path).exists():
+                    self.audio_file_path = audio_path
+                    self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(audio_path)))
+                    self.audio_info_label.setText(f"Audio: {Path(audio_path).name}")
+                    self.btn_play.setEnabled(True)
+                    #self.btn_stop.setEnabled(True)
+                    self.btn_rewind.setEnabled(True)
+                    self.btn_forward.setEnabled(True)
+                    self.btn_jump_to.setEnabled(True)
+                    self.auto_sync_check.setEnabled(True)
+                    self.auto_pause_check.setEnabled(True)
+                    self.audio_progress.setEnabled(True)
+                    
+                viewer_theme = project_data.get('viewer_theme', 'light')
+                self.apply_viewer_theme(viewer_theme)
+                
                 self.update_display()
+                self.clear_unsaved_changes()
                 
                 QMessageBox.information(self, "Success", f"Project loaded from {file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not load project: {str(e)}")
 
+    def apply_viewer_theme(self, theme):
+        self.current_theme = theme
+        if theme == "dark":
+            # Dark theme styles
+            self.text_display.setStyleSheet("""
+                QTextEdit {
+                    background-color: #2b2b2b;
+                    color: #ffffff;  /* White text for dark theme */
+                    border: 2px solid #555;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+            """)
+            self.current_info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #3a3a3a;
+                    color: #ffffff;  /* White text */
+                    padding: 10px;
+                    border: 2px solid #555;
+                    border-radius: 5px;
+                    font-weight: bold;
+                }
+            """)
+            # Dark theme speaker colors - lighter versions for better contrast with white text
+            self.speaker_colors = [
+                QColor(60, 80, 100),   # Dark blue (lighter)
+                QColor(100, 60, 60),   # Dark red (lighter)
+                QColor(60, 100, 60),   # Dark green (lighter)
+                QColor(100, 100, 60)   # Dark yellow (lighter)
+            ]
+        else:  # light theme
+            # Light theme styles
+            self.text_display.setStyleSheet("""
+                QTextEdit {
+                    background-color: #fafafa;
+                    color: #000000;  /* Black text for light theme */
+                    border: 2px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+            """)
+            self.current_info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #f0f0f0;
+                    color: #000000;  /* Black text */
+                    padding: 10px;
+                    border: 2px solid #ccc;
+                    border-radius: 5px;
+                    font-weight: bold;
+                }
+            """)
+            # Light theme speaker colors (original colors)
+            self.speaker_colors = [
+                QColor(220, 240, 255),  # Light blue
+                QColor(255, 220, 220),  # Light red
+                QColor(220, 255, 220),  # Light green
+                QColor(255, 255, 200)   # Light yellow
+            ]
+        
+        # Update speaker widget colors
+        self.create_speaker_widgets()
+        # Refresh the display to apply new colors
+        self.update_display()
+    
     def update_display(self):
         if not self.srt_blocks:
             self.text_display.setPlainText("No content loaded")
@@ -1271,8 +2142,8 @@ class SRTEditor(QMainWindow):
         cursor = self.text_display.textCursor()
         cursor.select(cursor.Document)
         
+        # Reset to default formatting
         format_normal = QTextCharFormat()
-        format_normal.setBackground(QColor(250, 250, 250))
         cursor.setCharFormat(format_normal)
         
         start_idx = max(0, self.current_block_index - self.context_blocks)
@@ -1301,7 +2172,11 @@ class SRTEditor(QMainWindow):
         
         cursor.movePosition(cursor.Down, cursor.KeepAnchor)
         current_format = QTextCharFormat()
-        current_format.setBackground(QColor(255, 240, 200))
+        # Current block highlighting
+        if hasattr(self, 'current_theme') and self.current_theme == "dark":
+            current_format.setBackground(QColor(120, 120, 200))  # Subtle dark highlight
+        else:
+            current_format.setBackground(QColor(255, 240, 200))  # Original light yellow
         current_format.setFontWeight(QFont.Bold)
         cursor.setCharFormat(current_format)
         
@@ -1351,7 +2226,11 @@ class SRTEditor(QMainWindow):
             else:
                 break
         
-        self.find_next_unassigned()
+        # FIXED: Only auto-advance if audio is not playing with sync enabled
+        if not (self.is_playing and self.auto_sync_enabled):
+            self.find_next_unassigned()
+            
+        self.mark_unsaved_changes()
         
     def unassign_current(self):
         if not self.srt_blocks:
@@ -1368,6 +2247,7 @@ class SRTEditor(QMainWindow):
                 self.srt_blocks[i]['is_turn_start'] = (prev_speaker != current_speaker)
         
         self.update_display()
+        self.mark_unsaved_changes()
         
     def find_next_unassigned(self):
         start_index = self.current_block_index
@@ -1385,6 +2265,12 @@ class SRTEditor(QMainWindow):
     def split_current_block(self):
         if not self.srt_blocks:
             return
+            
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
             
         current_block = self.srt_blocks[self.current_block_index]
         dialog = BlockSplitDialog(current_block['text'], self)
@@ -1410,6 +2296,11 @@ class SRTEditor(QMainWindow):
                     
                     self.srt_blocks.insert(self.current_block_index + 1, new_block)
                     self.update_display()
+                    self.mark_unsaved_changes()
+                    
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def merge_with_next(self):
         if self.current_block_index >= len(self.srt_blocks) - 1:
@@ -1427,10 +2318,17 @@ class SRTEditor(QMainWindow):
             
             del self.srt_blocks[self.current_block_index + 1]
             self.update_display()
+            self.mark_unsaved_changes()
     
     def edit_current_block(self):
         if not self.srt_blocks:
             return
+            
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
             
         current_block = self.srt_blocks[self.current_block_index]
         dialog = EditDialog(current_block['text'], self)
@@ -1439,15 +2337,30 @@ class SRTEditor(QMainWindow):
             new_text = dialog.get_text()
             current_block['text'] = new_text
             self.update_display()
+            self.mark_unsaved_changes()
+            
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def open_pause_dialog(self):
         if not self.srt_blocks:
             return
             
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
+            
         dialog = EnhancedPauseDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             option_index = dialog.selected_option
             self.handle_gat2_symbol(option_index)
+            
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def handle_gat2_symbol(self, option_index):
         symbols = ["(.)", "(-)", "(--)", "(---)", "(_._)", "(())", "<<>>", "[ ]", "°h", "°hh", "°hhh", "h°", "hh°", "hhh°"]
@@ -1465,6 +2378,12 @@ class SRTEditor(QMainWindow):
             self.handle_pause(symbol)
     
     def handle_measured_pause(self):
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
+            
         time_ms, ok = QInputDialog.getInt(
             self, 
             "Measured Pause", 
@@ -1497,10 +2416,21 @@ class SRTEditor(QMainWindow):
                                            " " + current_block['text'][pos:]).strip()
                 
                 self.update_display()
+                self.mark_unsaved_changes()
+                
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def handle_pause(self, symbol):
         if not self.srt_blocks:
             return
+            
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
             
         current_block = self.srt_blocks[self.current_block_index]
         dialog = PlacementDialog(current_block['text'], symbol, self)
@@ -1523,8 +2453,19 @@ class SRTEditor(QMainWindow):
                                        " " + current_block['text'][pos:]).strip()
             
             self.update_display()
+            self.mark_unsaved_changes()
+            
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def handle_comment(self):
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
+            
         dialog = CommentDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             comment = dialog.get_comment()
@@ -1550,10 +2491,21 @@ class SRTEditor(QMainWindow):
                                                " " + current_block['text'][pos:]).strip()
                     
                     self.update_display()
+                    self.mark_unsaved_changes()
+                    
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def handle_action(self):
         if not self.srt_blocks:
             return
+            
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
             
         current_block = self.srt_blocks[self.current_block_index]
         dialog = TextSelectionDialog(current_block['text'], self)
@@ -1568,12 +2520,23 @@ class SRTEditor(QMainWindow):
                     after_text = current_block['text'][end_pos:]
                     current_block['text'] = f"{before_text}<<{action_text}> {selected_text}>{after_text}"
                     self.update_display()
+                    self.mark_unsaved_changes()
+                    
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def handle_overlap(self):
         if not self.srt_blocks or self.current_block_index == 0:
             QMessageBox.information(self, "Overlap Feature", 
                                    "Overlap requires at least two consecutive blocks.")
             return
+            
+        # NEW: Auto-pause if enabled
+        was_playing = False
+        if self.auto_pause_enabled and self.is_playing:
+            was_playing = True
+            self.media_player.pause()
             
         current_block = self.srt_blocks[self.current_block_index]
         prev_block = self.srt_blocks[self.current_block_index - 1]
@@ -1600,6 +2563,11 @@ class SRTEditor(QMainWindow):
                         prev_block['text'] = f"{prev_before}[{prev_selected}]{prev_after}"
                         
                         self.update_display()
+                        self.mark_unsaved_changes()
+                        
+        # NEW: Resume playback if was playing and autopause enabled
+        if was_playing and self.auto_pause_enabled:
+            self.media_player.play()
     
     def insert_empty_line(self):
         if not self.srt_blocks:
@@ -1617,6 +2585,7 @@ class SRTEditor(QMainWindow):
         self.srt_blocks.insert(self.current_block_index + 1, new_block)
         self.current_block_index += 1
         self.update_display()
+        self.mark_unsaved_changes()
     
     def jump_to_block(self, item):
         text = item.text()
@@ -1631,11 +2600,16 @@ class SRTEditor(QMainWindow):
         if not self.srt_blocks:
             return
             
-        preview_dialog = ExportPreviewDialog(self, self.file_has_timestamps)
+        project_info = {
+            'name': self.project_name,
+            'memo': self.project_memo
+        }
+        
+        preview_dialog = ExportPreviewDialog(self, self.file_has_timestamps, project_info, self.audio_file_path)
         if preview_dialog.exec_() == QDialog.Accepted:
             settings = preview_dialog.get_export_settings()
             transcript_text = self.generate_transcript_text(include_timestamps=settings['include_timestamps'])
-            self.final_export(transcript_text, settings)
+            self.final_export(transcript_text, settings, project_info)
     
     def generate_transcript_text(self, include_timestamps=True):
         total_lines = len([b for b in self.srt_blocks if b.get('speaker') is not None or b.get('is_pause') or b.get('is_comment') or b.get('is_empty')])
@@ -1652,6 +2626,8 @@ class SRTEditor(QMainWindow):
         output_lines = []
         line_number = 1
         
+        output_lines.append("")
+    
         for block in self.srt_blocks:
             if block.get('is_pause') or block.get('is_comment') or block.get('is_empty'):
                 if block['text']:
@@ -1659,11 +2635,9 @@ class SRTEditor(QMainWindow):
                     
                     if include_timestamps:
                         timestamp_spaces = " " * 13
-                        # Fixed: Use consistent indentation for all non-speaker lines
                         speaker_spaces = " " * (max_speaker_length + 3)
                         line = f"{timestamp_spaces}{padded_line_num}   {speaker_spaces}{block['text']}"
                     else:
-                        # FIXED: Use consistent indentation matching speaker lines
                         speaker_spaces = " " * (max_speaker_length + 3)
                         line = f"{padded_line_num}   {speaker_spaces}{block['text']}"
                     
@@ -1709,7 +2683,7 @@ class SRTEditor(QMainWindow):
         
         return '\n'.join(output_lines)
     
-    def final_export(self, transcript_text, settings):
+    def final_export(self, transcript_text, settings, project_info):
         file_ext = ".html" if settings['format'] == 'html' else ".txt"
         file_path, _ = QFileDialog.getSaveFileName(
             self, f"Export Transcript", "", 
@@ -1718,14 +2692,52 @@ class SRTEditor(QMainWindow):
         
         if file_path:
             try:
+                # Build header content based on settings
+                header_lines = []
+                
+                if settings.get('include_title', True) and project_info.get('name'):
+                    if settings['format'] == "html":
+                        header_lines.append(f"<h1>{project_info['name']}</h1>")
+                    else:
+                        header_lines.append(project_info['name'])
+                        header_lines.append("=" * len(project_info['name']))
+                        header_lines.append("")
+                
+                if settings.get('include_memo', True) and project_info.get('memo'):
+                    if settings['format'] == "html":
+                        header_lines.append(f"<p><strong>Project Memo:</strong> {project_info['memo']}</p>")
+                    else:
+                        header_lines.append(f"Project Memo: {project_info['memo']}")
+                        header_lines.append("")
+                
+                if settings.get('include_audio', True) and self.audio_file_path:
+                    audio_name = Path(self.audio_file_path).name
+                    if settings['format'] == "html":
+                        header_lines.append(f"<p><strong>Audio File:</strong> {audio_name}</p>")
+                    else:
+                        header_lines.append(f"Audio File: {audio_name}")
+                        header_lines.append("")
+                
+                if header_lines:
+                    if settings['format'] == "html":
+                        header_text = "\n".join(header_lines)
+                        # Add <br> tag for separation in HTML
+                        full_text = f"{header_text}\n{transcript_text}"
+                    else:
+                        header_text = "\n".join(header_lines)
+                        # Add empty line for separation in text
+                        full_text = f"{header_text}\n{transcript_text}"
+                else:
+                    full_text = transcript_text
+                
                 if settings['format'] == 'html':
                     # FIXED: Ensure no leading spaces in HTML body
-                    clean_transcript = transcript_text.lstrip()
+                    clean_text = full_text.lstrip()
                     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>GAT2 Transcript</title>
+<title>GAT2 Transcript - {project_info.get('name', 'Untitled')}</title>
 <style>
 body {{
     font-family: 'Courier New', monospace;
@@ -1734,21 +2746,34 @@ body {{
     margin: 20px;
     white-space: pre;
 }}
+h1 {{
+    font-family: Arial, sans-serif;
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+}}
 </style>
 </head>
 <body>
-{clean_transcript}
+{clean_text}
 </body>
 </html>"""
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(html_content)
                 else:
                     with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(transcript_text)
+                        f.write(full_text)
                 
                 QMessageBox.information(self, "Success", f"Transcript exported to {file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not export file: {str(e)}")
+                
+    def closeEvent(self, event):
+        """Handle application close event"""
+        if self.check_unsaved_changes():
+            event.accept()
+        else:
+            event.ignore()
 
 def main():
     app = QApplication(sys.argv)
