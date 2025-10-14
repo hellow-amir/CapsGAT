@@ -213,7 +213,12 @@ class EnhancedPauseDialog(QDialog):
         
         self.option_labels = []
         for i, (symbol, desc) in enumerate(zip(self.pause_options, self.pause_descriptions)):
-            label = QLabel(f"<b>{symbol}</b>")
+            # Escape HTML in the symbol for display
+            escaped_symbol = (symbol.replace('&', '&amp;')
+                                   .replace('<', '&lt;')
+                                   .replace('>', '&gt;'))
+            
+            label = QLabel(f"<b>{escaped_symbol}</b>")  # Use escaped symbol here
             label.setAlignment(Qt.AlignCenter)
             label.setToolTip(desc)
             label.setStyleSheet("""
@@ -690,7 +695,8 @@ class ExportPreviewDialog(QDialog):
             
             if self.title_check.isChecked() and self.project_info.get('name'):
                 if self.export_format == "html":
-                    header_lines.append(f"<h1>{self.project_info['name']}</h1>")
+                    escaped_name = parent.escape_html(self.project_info['name'])
+                    header_lines.append(f"<h1>{escaped_name}</h1>")
                 else:
                     header_lines.append(self.project_info['name'])
                     header_lines.append("=" * len(self.project_info['name']))
@@ -698,7 +704,8 @@ class ExportPreviewDialog(QDialog):
             
             if self.memo_check.isChecked() and self.project_info.get('memo'):
                 if self.export_format == "html":
-                    header_lines.append(f"<p><strong>Project Memo:</strong> {self.project_info['memo']}</p>")
+                    escaped_memo = parent.escape_html(self.project_info['memo'])
+                    header_lines.append(f"<p><strong>Project Memo:</strong> {escaped_memo}</p>")
                 else:
                     header_lines.append(f"Project Memo: {self.project_info['memo']}")
                     header_lines.append("")
@@ -706,7 +713,8 @@ class ExportPreviewDialog(QDialog):
             if self.audio_check.isChecked() and self.audio_path:
                 audio_name = Path(self.audio_path).name
                 if self.export_format == "html":
-                    header_lines.append(f"<p><strong>Audio File:</strong> {audio_name}</p>")
+                    escaped_audio = parent.escape_html(audio_name)
+                    header_lines.append(f"<p><strong>Audio File:</strong> {escaped_audio}</p>")
                 else:
                     header_lines.append(f"Audio File: {audio_name}")
                     header_lines.append("")
@@ -714,13 +722,17 @@ class ExportPreviewDialog(QDialog):
             if header_lines:
                 if self.export_format == "html":
                     header_text = "\n".join(header_lines)
-                    full_text = f"{header_text}\n{transcript_text}"
+                    escaped_transcript = parent.escape_html(transcript_text)
+                    full_text = f"{header_text}\n{escaped_transcript}"
                 else:
                     header_text = "\n".join(header_lines)
                     full_text = f"{header_text}\n{transcript_text}"
             else:
-                full_text = transcript_text
-                
+                if self.export_format == "html":
+                    full_text = parent.escape_html(transcript_text)
+                else:
+                    full_text = transcript_text
+                    
         else:
             full_text = "Preview not available"
             
@@ -1117,13 +1129,22 @@ class SRTEditor(QMainWindow):
         self.setup_shortcuts()
         self.init_audio_player()
         
+    def escape_html(self, text):
+        """Escape HTML special characters to prevent interpretation as HTML tags"""
+        if not text:
+            return text
+        return (text.replace('&', '&amp;')
+                   .replace('<', '&lt;')
+                   .replace('>', '&gt;')
+                   .replace('"', '&quot;')
+                   .replace("'", '&#39;'))
+    
     def create_menu_bar(self):
         menubar = self.menuBar()
         
         # File menu
         file_menu = menubar.addMenu('File')
         
-        # NEW: New Project option
         new_project_action = QAction('New Project', self)
         new_project_action.setShortcut('Ctrl+N')
         new_project_action.triggered.connect(self.new_project)
@@ -1136,12 +1157,14 @@ class SRTEditor(QMainWindow):
         
         save_project_action = QAction('Save Project', self)
         save_project_action.setShortcut('Ctrl+S')
-        save_project_action.triggered.connect(self.save_project)
+        save_project_action.triggered.connect(self.save_project)  # This will now handle first-time save correctly
         file_menu.addAction(save_project_action)
         
         save_as_action = QAction('Save Project As...', self)
-        save_as_action.triggered.connect(self.save_project_as)
+        save_as_action.triggered.connect(lambda: self.save_project(force_save_as=True))
         file_menu.addAction(save_as_action)
+        
+        # ... rest of the menu code remains the same
         
         file_menu.addSeparator()
         
@@ -1260,7 +1283,7 @@ File Operations:
         
     def open_manual(self):
         """Open online manual in browser"""
-        webbrowser.open("https://github.com/anouarg88/CapsGAT/blob/main/manual.htm")
+        webbrowser.open("https://github.com/anouarg88/CapsGAT/wiki")
         
     def show_about(self):
         """Show about dialog"""
@@ -1955,32 +1978,67 @@ Engineered with DeepSeek-V3.2
         if not self.srt_blocks:
             return
             
-        file_path = self.current_file_path
+        # Determine the file path for saving
+        file_path = None
+        
+        # If we have a current file path, check if it's already a .capsgat project file
+        if not force_save_as and self.current_file_path:
+            if self.current_file_path.endswith('.capsgat'):
+                # It's already a project file, use it
+                file_path = self.current_file_path
+            else:
+                # It's an imported transcript file, force "Save As" behavior
+                force_save_as = True
+        
+        # If we need to get a new file path (first save or Save As)
         if force_save_as or not file_path:
-            file_path, _ = QFileDialog.getSaveFileName(self, "Save Project", "", "CapsGAT Project Files (*.capsgat)")
+            # Suggest a default filename based on project name or original file
+            default_name = ""
+            if self.project_name:
+                default_name = self.project_name.replace(" ", "_") + ".capsgat"
+            elif self.current_file_path:
+                # Use the original filename but change extension
+                original_stem = Path(self.current_file_path).stem
+                default_name = f"{original_stem}.capsgat"
+            else:
+                default_name = "transcript_project.capsgat"
+                
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 
+                "Save Project As", 
+                default_name,
+                "CapsGAT Project Files (*.capsgat)"
+            )
             
+            if not file_path:  # User canceled
+                return
+                
+            # Ensure the file has the correct extension
+            if not file_path.endswith('.capsgat'):
+                file_path += '.capsgat'
+        
         if file_path:
             try:
                 project_data = {
                     'srt_blocks': self.srt_blocks,
                     'current_block_index': self.current_block_index,
                     'speakers': self.speakers,
-                    'source_file': self.current_file_path,
+                    'source_file': self.current_file_path,  # Keep reference to original transcript
                     'file_has_timestamps': self.file_has_timestamps,
                     'audio_file_path': self.audio_file_path,
                     'project_name': self.project_name,
                     'project_memo': self.project_memo,
                     'text_display_font': {
                         'family': self.text_display_font.family(),
-                        'size': self.text_display_font.pointSize(),
-                        'viewer_theme': 'light'  # or get current theme
-                    }
+                        'size': self.text_display_font.pointSize()
+                    },
+                    'viewer_theme': getattr(self, 'current_theme', 'light')
                 }
                 
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(project_data, f, indent=2, ensure_ascii=False)
                     
-                self.current_file_path = file_path
+                self.current_file_path = file_path  # Update to the project file path
                 self.clear_unsaved_changes()
                 QMessageBox.information(self, "Success", f"Project saved to {file_path}")
             except Exception as e:
@@ -2697,7 +2755,8 @@ Engineered with DeepSeek-V3.2
                 
                 if settings.get('include_title', True) and project_info.get('name'):
                     if settings['format'] == "html":
-                        header_lines.append(f"<h1>{project_info['name']}</h1>")
+                        escaped_name = self.escape_html(project_info['name'])
+                        header_lines.append(f"<h1>{escaped_name}</h1>")
                     else:
                         header_lines.append(project_info['name'])
                         header_lines.append("=" * len(project_info['name']))
@@ -2705,7 +2764,8 @@ Engineered with DeepSeek-V3.2
                 
                 if settings.get('include_memo', True) and project_info.get('memo'):
                     if settings['format'] == "html":
-                        header_lines.append(f"<p><strong>Project Memo:</strong> {project_info['memo']}</p>")
+                        escaped_memo = self.escape_html(project_info['memo'])
+                        header_lines.append(f"<p><strong>Project Memo:</strong> {escaped_memo}</p>")
                     else:
                         header_lines.append(f"Project Memo: {project_info['memo']}")
                         header_lines.append("")
@@ -2713,7 +2773,8 @@ Engineered with DeepSeek-V3.2
                 if settings.get('include_audio', True) and self.audio_file_path:
                     audio_name = Path(self.audio_file_path).name
                     if settings['format'] == "html":
-                        header_lines.append(f"<p><strong>Audio File:</strong> {audio_name}</p>")
+                        escaped_audio = self.escape_html(audio_name)
+                        header_lines.append(f"<p><strong>Audio File:</strong> {escaped_audio}</p>")
                     else:
                         header_lines.append(f"Audio File: {audio_name}")
                         header_lines.append("")
@@ -2721,43 +2782,46 @@ Engineered with DeepSeek-V3.2
                 if header_lines:
                     if settings['format'] == "html":
                         header_text = "\n".join(header_lines)
-                        # Add <br> tag for separation in HTML
-                        full_text = f"{header_text}\n{transcript_text}"
+                        # Escape the transcript text for HTML
+                        escaped_transcript = self.escape_html(transcript_text)
+                        full_text = f"{header_text}\n{escaped_transcript}"
                     else:
                         header_text = "\n".join(header_lines)
-                        # Add empty line for separation in text
                         full_text = f"{header_text}\n{transcript_text}"
                 else:
-                    full_text = transcript_text
+                    if settings['format'] == "html":
+                        full_text = self.escape_html(transcript_text)
+                    else:
+                        full_text = transcript_text
                 
                 if settings['format'] == 'html':
-                    # FIXED: Ensure no leading spaces in HTML body
+                    # FIXED: Ensure no leading spaces in HTML body and escape content
                     clean_text = full_text.lstrip()
                     html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>GAT2 Transcript - {project_info.get('name', 'Untitled')}</title>
-<style>
-body {{
-    font-family: 'Courier New', monospace;
-    font-size: 10pt;
-    line-height: 1.2;
-    margin: 20px;
-    white-space: pre;
-}}
-h1 {{
-    font-family: Arial, sans-serif;
-    color: #333;
-    border-bottom: 2px solid #333;
-    padding-bottom: 10px;
-}}
-</style>
-</head>
-<body>
-{clean_text}
-</body>
-</html>"""
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <title>GAT2 Transcript - {self.escape_html(project_info.get('name', 'Untitled'))}</title>
+    <style>
+    body {{
+        font-family: 'Courier New', monospace;
+        font-size: 10pt;
+        line-height: 1.2;
+        margin: 20px;
+        white-space: pre;
+    }}
+    h1 {{
+        font-family: Arial, sans-serif;
+        color: #333;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+    }}
+    </style>
+    </head>
+    <body>
+    {clean_text}
+    </body>
+    </html>"""
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(html_content)
                 else:
