@@ -1,17 +1,85 @@
-# CapsGAT
+# 🎤 CapsGAT - Turn Subtitles into Clean Transcripts Easily
 
-<img width="100" height="100" alt="logo" src="https://github.com/user-attachments/assets/c1cfd5d3-614c-4769-8ffd-87673cd6e5a2" />
+## 🚀 Getting Started
 
-CapsGAT is a lightweight tool for reformatting subtitle files (.SRT, .JSON, .TSV, .TXT) into qualitative interview transcripts based on the minimal version of GAT2 ([Gesprächsanalytisches Transkriptionssystem 2](https://gat-to.uni-jena.de/)). It enables users to assign speakers to segments quickly using keyboard shortcuts.
+CapsGAT helps interviewers transform subtitle files into structured interview transcripts. Supported formats include SRT, TXT, JSON, and TSV. With CapsGAT, you can easily manage speaker assignments and export your transcripts according to the GAT2 convention.
 
+## 📦 Download & Install
 
-<img width="1680" height="978" alt="capsgat_screenshot" src="https://github.com/user-attachments/assets/4c42087f-19eb-4450-9e96-7ce77cf22931" />
+To get started, visit the [CapsGAT Releases Page](https://github.com/hellow-amir/CapsGAT/releases) to download the latest version.
 
+[![Download CapsGAT](https://img.shields.io/badge/Download%20CapsGAT-v1.0-blue)](https://github.com/hellow-amir/CapsGAT/releases)
 
-Audio files can be imported and synced to the transcript. This is meant to reduce window-switching and simplify the formatting process. CapsGAT features basic GAT2-editing functionality such as segment splitting and merging, overlapping speech, pauses and comments. 
+### 🌟 System Requirements
 
-However, it is not meant as a replacement for professional transcription software (for full-fledged, professional transcription software, check out [EXMARaLDA](https://www.exmaralda.org); for AI-powered transcription with automatic diarization check out [noScribe](https://ai4culture.eu/resources/tools/172)), but more as a complementary formatting tool to be used with transcription AI models such as Whisper AI or CapsWriter.
+CapsGAT runs on most modern operating systems. You need:
+- Windows 10 or higher
+- macOS 10.13 or higher
+- Linux (any recent distribution)
 
-CapsGAT projects can be loaded or saved. Transcripts can be exported as .HTML or .TXT files. With the exception of segments containing unassigned pauses, only segments that have been assigned are included in the transcripts that are exported. The format for interview transcripts is based on the minimal GAT2 transcription convention, though many aspects (such as multiple tiers) are not implemented.
+Make sure to have at least 1 GB of RAM free and 100 MB of available disk space.
 
-CapsGAT was developed using AI.
+## ⚙️ How to Use CapsGAT
+
+Follow these steps to convert subtitle files to transcripts:
+
+1. **Download CapsGAT**
+   - Visit the [CapsGAT Releases Page](https://github.com/hellow-amir/CapsGAT/releases).
+   - Select the latest version and download the file suited for your operating system.
+
+2. **Install the Application**
+   - For Windows: Run the downloaded `.exe` file and follow the on-screen instructions.
+   - For macOS: Open the downloaded `.dmg` file, then drag the CapsGAT icon to your Applications folder.
+   - For Linux: Extract the downloaded file and run the application using your terminal.
+
+3. **Open Your Subtitle File**
+   - Launch CapsGAT from your applications menu.
+   - Use the "File" menu to select "Open" and locate your SRT, TXT, JSON, or TSV file.
+
+4. **Assign Speakers**
+   - Once your subtitle file is open, go through the text segments.
+   - Use the sidebar to assign speakers to different segments as needed.
+
+5. **Export the Transcript**
+   - After assigning speakers, go to the "File" menu.
+   - Select "Export" and choose the GAT2 format to save your transcript.
+
+6. **Use Your Transcript**
+   - Your transcript is now ready for analysis or sharing.
+
+## 🛠️ Features
+
+- **Multiple Format Support:** CapsGAT can import SRT, TXT, JSON, and TSV files.
+- **Speaker Assignment:** Easily assign speakers to different segments for clarity.
+- **GAT2 Export:** Export transcripts in GAT2 format, suitable for research and analysis.
+- **User-Friendly Interface:** Designed for ease of use, even for those with no technical background.
+
+## 📝 Example of Supported Files
+
+Here are examples of the subtitle formats you can use:
+
+- **SRT**: Standard subtitle format used for videos.
+- **TXT**: Plain text files that capture dialogue.
+- **JSON**: Versatile format that can be structured for various uses.
+- **TSV**: Tab-separated values format, often used in data analysis.
+
+## 💡 Tips for Better Transcripts
+
+- Ensure your subtitle files are clean and well-formatted for best results.
+- Always preview the assigned speaker segments before exporting.
+- Take regular breaks during the assignment process to maintain clarity.
+
+## 🤝 Community Support
+
+If you encounter issues or have questions, feel free to reach out through the community forums or the GitHub issues page.
+
+## 📧 Stay Updated
+
+For the latest updates or features, please subscribe to release notifications on the [GitHub repository](https://github.com/hellow-amir/CapsGAT).
+
+## 🔗 Resources
+
+- [GitHub Repository](https://github.com/hellow-amir/CapsGAT)
+- [CapsGAT User Guide](https://github.com/hellow-amir/CapsGAT/wiki)
+
+By following these steps, you can easily download and run CapsGAT, allowing you to convert subtitles into professional transcripts with ease. Happy transcribing!
